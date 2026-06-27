@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checklist ArcelorMittal</title>
+    <style>
+        :root { --primary: #e63946; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; }
+        
+        body { 
+            margin: 0; font-family: 'Segoe UI', sans-serif; background: linear-gradient(-45deg, #0f172a, #1e293b, #0f172a); 
+            background-size: 400% 400%; animation: gradient 15s ease infinite; color: var(--text); min-height: 100vh; padding: 20px;
+        }
+        @keyframes gradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+        /* Header Style */
+        .app-header { text-align: center; margin-bottom: 20px; color: white; }
+        .app-header h1 { margin: 0; font-size: 1.4em; border-bottom: 2px solid var(--primary); display: inline-block; padding-bottom: 5px; }
+        .app-header p { margin: 5px 0 0 0; font-size: 0.9em; opacity: 0.8; }
+
+        .container { max-width: 500px; margin: auto; }
+        .screen { display: none; background: rgba(30, 41, 59, 0.9); backdrop-filter: blur(10px); padding: 20px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); }
+        .active { display: block; }
+
+        h2 { border-bottom: 1px solid var(--primary); padding-bottom: 10px; margin-top: 0; font-size: 1.2em; }
+        input, select, textarea { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; background: #334155; color: white; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; margin-top: 10px; border: none; border-radius: 8px; background: var(--primary); color: white; font-weight: bold; cursor: pointer; }
+        
+        .radio-group { display: flex; gap: 10px; margin: 10px 0; }
+        .item-row { border-bottom: 1px solid #475569; padding: 10px 0; font-size: 0.9em; }
+        
+        .hist-card { background: #334155; padding: 15px; border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: 0.3s; }
+        .hist-card:hover { background: #475569; }
+        .details-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #334155; }
+        .status-badge { padding: 2px 8px; border-radius: 4px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="app-header">
+    <h1>ARCELORMITTAL CHECK-LIST</h1>
+    <p>PADRÃO PO-MAN-CONT-00-0006</p>
+</div>
+
+<div class="container">
+    <!-- TELA 1: IDENTIFICAÇÃO -->
+    <div id="screen-id" class="screen active">
+        <h2>👤 Identificação</h2>
+        <input type="text" id="nome" placeholder="Nome Completo" required>
+        <input type="number" id="matricula" placeholder="Matrícula" required>
+        <input type="text" id="turno" placeholder="Turno/Letra" required>
+        <p>Data: <span id="data-auto"></span></p>
+        <button onclick="validaIdentificacao()">Continuar</button>
+        <button onclick="showScreen('screen-history')" style="background:#64748b">Ver Histórico</button>
+    </div>
+
+    <!-- TELA 2: ESCOLHA PÓRTICO -->
+    <div id="screen-selection" class="screen">
+        <h2>🚧 Escolha o Pórtico</h2>
+        <div id="btn-container"></div>
+        <button onclick="showScreen('screen-id')" style="background:#64748b">Voltar</button>
+    </div>
+
+    <!-- TELA 3: CHECKLIST -->
+    <div id="screen-checklist" class="screen">
+        <h2 id="portico-title">Checklist</h2>
+        <div id="checklist-items"></div>
+        <textarea id="obs" rows="3" placeholder="Observações"></textarea>
+        <button onclick="salvarChecklist()">Salvar e Finalizar</button>
+        <button onclick="showScreen('screen-selection')" style="background:#64748b">Voltar</button>
+    </div>
+
+    <!-- HISTÓRICO -->
+    <div id="screen-history" class="screen">
+        <h2>📜 Histórico</h2>
+        <div id="history-list"></div>
+        <button onclick="showScreen('screen-id')">Voltar ao Início</button>
+    </div>
+
+    <!-- TELA DE DETALHES -->
+    <div id="screen-details" class="screen">
+        <h2>🔍 Detalhes do Registro</h2>
+        <div id="details-content"></div>
+        <button onclick="showScreen('screen-history')" style="background:#64748b">Voltar ao Histórico</button>
+    </div>
+</div>
+
+<script>
+    const items = ["Iluminação - Refletores", "Controle remoto / Pendente", "Condições de limpeza", "Sirene", "Freio de içamento", "Freio de translação / Giro", "Freio de translação do carro", "Sistema de içamento principal", "Trava de segurança do gancho", "Cabo de aço / corrente - visual", "Enrolador de cabo", "Cabo dentro da roldana", "Sistema de translação do pórtico", "Sistema de translação do carro (Trolley)", "Limite fim de curso (Içamento)", "Limite fim de curso (Translação)"];
+
+    const porticos = { "MLC #1": ["44 GI 01", "44 GI 06"], "MLC #2": ["46 PR 16", "46 PR 17"], "MLC #3": ["48 GI 05", "48 GI 06", "48 GI 07", "48 GI 08", "48 GI 09", "48 GI 10", "48 GI 10A"] };
+
+    let currentUser = {};
+    let currentPortico = "";
+
+    document.getElementById('data-auto').innerText = new Date().toLocaleString();
+
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if(id === 'screen-history') renderHistory();
+    }
+
+    function validaIdentificacao() {
+        const nome = document.getElementById('nome').value;
+        const mat = document.getElementById('matricula').value;
+        const turno = document.getElementById('turno').value;
+        if(!nome || !mat || !turno) { alert("Preencha todos os campos!"); return; }
+        currentUser = { nome, mat, turno, data: new Date().toLocaleString() };
+        renderSelection();
+        showScreen('screen-selection');
+    }
+
+    function renderSelection() {
+        const container = document.getElementById('btn-container');
+        container.innerHTML = '';
+        for(let mlc in porticos) {
+            container.innerHTML += `<h3>${mlc}</h3>`;
+            porticos[mlc].forEach(p => {
+                container.innerHTML += `<button onclick="iniciarChecklist('${p}')">${p}</button>`;
+            });
+        }
+    }
+
+    function iniciarChecklist(nome) {
+        currentPortico = nome;
+        document.getElementById('portico-title').innerText = "Checklist: " + nome;
+        const list = document.getElementById('checklist-items');
+        list.innerHTML = '';
+        items.forEach((item, index) => {
+            list.innerHTML += `<div class="item-row"><label>${item}</label><div class="radio-group" data-item="${index}"><input type="radio" name="r${index}" value="OK"> OK <input type="radio" name="r${index}" value="NÃO"> NÃO <input type="radio" name="r${index}" value="N/A"> N/A</div></div>`;
+        });
+        showScreen('screen-checklist');
+    }
+
+    function salvarChecklist() {
+        let respostas = [];
+        let completo = true;
+        for(let i=0; i<items.length; i++) {
+            const val = document.querySelector(`input[name="r${i}"]:checked`);
+            if(!val) { completo = false; break; }
+            respostas.push({item: items[i], status: val.value});
+        }
+        if(!completo) { alert("Responda todos os itens!"); return; }
+        if(!confirm("Deseja finalizar e salvar?")) return;
+
+        const record = { ...currentUser, portico: currentPortico, respostas, obs: document.getElementById('obs').value };
+        let history = JSON.parse(localStorage.getItem('checklist_db') || "[]");
+        history.push(record);
+        localStorage.setItem('checklist_db', JSON.stringify(history));
+        alert("Checklist salvo com sucesso!");
+        location.reload();
+    }
+
+    function renderHistory() {
+        const list = document.getElementById('history-list');
+        const data = JSON.parse(localStorage.getItem('checklist_db') || "[]");
+        list.innerHTML = data.length ? '' : '<p>Nenhum histórico encontrado.</p>';
+        data.forEach((item, index) => {
+            list.innerHTML += `
+                <div class="hist-card" onclick="showDetails(${index})">
+                    <strong>${item.portico}</strong><br>
+                    ${item.nome} - ${item.data}
+                </div>`;
+        });
+    }
+
+    function showDetails(index) {
+        const data = JSON.parse(localStorage.getItem('checklist_db'))[index];
+        const detailsDiv = document.getElementById('details-content');
+        
+        let html = `
+            <p><strong>Operador:</strong> ${data.nome} (Mat: ${data.mat})</p>
+            <p><strong>Turno:</strong> ${data.turno} | <strong>Data:</strong> ${data.data}</p>
+            <p><strong>Pórtico:</strong> ${data.portico}</p>
+            <hr>
+            <h4>Itens Verificados:</h4>
+        `;
+        
+        data.respostas.forEach(r => {
+            html += `
+                <div class="details-item">
+                    <span>${r.item}</span>
+                    <span class="status-badge" style="background:${r.status === 'OK' ? '#16a34a' : '#e63946'}">${r.status}</span>
+                </div>`;
+        });
+        
+        html += `<p><strong>Observações:</strong><br>${data.obs || 'Nenhuma observação.'}</p>`;
+        
+        detailsDiv.innerHTML = html;
+        showScreen('screen-details');
+    }
+</script>
+</body>
+</html>
